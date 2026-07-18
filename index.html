@@ -3,90 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Route Opt</title>
+    <title>Route Optimizer Pro</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #f4f4f9; }
-        .controls { display: flex; gap: 10px; margin-bottom: 20px; }
-        input { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
-        button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; }
-        .btn-add { background: #27ae60; }
-        .btn-opt { background: #e67e22; }
-        .item { background: white; padding: 15px; margin-bottom: 8px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .nav-btn { background: #3498db; text-decoration: none; padding: 8px 12px; border-radius: 5px; color: white; font-size: 0.9em; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, sans-serif; padding: 15px; background: #f5f7fb; margin: 0; }
+        h3 { margin-top: 10px; color: #333; display: flex; justify-content: space-between; align-items: center; }
+        .controls { display: flex; gap: 8px; margin-bottom: 15px; }
+        select { padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; background: white; font-weight: bold; color: #2c3e50; }
+        input { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
+        input:focus, select:focus { border-color: #3498db; outline: none; }
+        button { padding: 12px 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; color: white; }
+        .btn-add { background: #2ecc71; }
+        .btn-opt { background: #e67e22; flex: 2; padding: 14px; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn-clear { background: #95a5a6; flex: 1; padding: 14px; font-size: 16px; }
+        .item { background: white; padding: 14px; margin-bottom: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 5px solid #bdc3c7; }
+        .item.has-coords { border-left-color: #3498db; }
+        .item.done { opacity: 0.4; text-decoration: line-through; background: #eaeded; }
+        .addr-text { flex: 1; font-size: 15px; color: #2c3e50; cursor: pointer; padding-left: 5px; padding-right: 10px; }
+        .actions { display: flex; gap: 8px; align-items: center; }
+        .nav-btn { background: #3498db; text-decoration: none; padding: 8px 14px; border-radius: 6px; color: white; font-size: 14px; font-weight: bold; }
+        .del-btn { background: #e74c3c; padding: 8px 12px; border-radius: 6px; color: white; font-size: 14px; }
     </style>
 </head>
 <body>
 
-<h3>Мой маршрут</h3>
-<div class="controls">
-    <input type="text" id="addrInput" placeholder="Улица и город...">
-    <button class="btn-add" onclick="addAddress()">Добавить</button>
-</div>
-<button class="btn-opt" onclick="optimize()">🚀 Оптимизировать маршрут</button>
+<h3>
+    <span>📍 Маршрут</span>
+</h3>
 
-<div id="list" style="margin-top:20px;"></div>
+<div class="controls">
+    <select id="citySelect" onchange="saveSettings()">
+        <option value="Bergamo">Bergamo</option>
+        <option value="Curno">Curno</option>
+        <option value="Terno d'Isola">Terno d'Isola</option>
+    </select>
+    <input type="text" id="addrInput" placeholder="Улица и дом...">
+    <button class="btn-add" onclick="addAddress()">➕</button>
+</div>
+
+<div class="controls">
+    <button class="btn-opt" onclick="optimize()">🚀 СОРТИРОВАТЬ</button>
+    <button class="btn-clear" onclick="clearAll()">🗑️ Очистить</button>
+</div>
+
+<div id="list"></div>
 
 <script>
     let points = [];
+
+    // Загрузка сохраненных данных при старте
+    window.onload = function() {
+        const savedCity = localStorage.getItem('selectedCity');
+        if (savedCity) {
+            document.getElementById('citySelect').value = savedCity;
+        }
+        
+        const savedPoints = localStorage.getItem('routePoints');
+        if (savedPoints) {
+            points = JSON.parse(savedPoints);
+            render();
+        }
+    };
+
+    function saveSettings() {
+        const city = document.getElementById('citySelect').value;
+        localStorage.setItem('selectedCity', city);
+    }
+
+    function savePointsToStorage() {
+        localStorage.setItem('routePoints', JSON.stringify(points));
+    }
 
     async function addAddress() {
         const input = document.getElementById('addrInput');
         const addr = input.value.trim();
         if (!addr) return;
 
-        // Получаем координаты (широту и долготу) через OpenStreetMap
+        const city = document.getElementById('citySelect').value;
+        let lat = null;
+        let lon = null;
+        let finalAddr = `${addr} (${city})`;
+
         try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`);
+            // Ищем строго в выбранном городе
+            const query = `${addr}, ${city}, Italy`;
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
             const data = await res.json();
             
-            if (data.length > 0) {
-                points.push({ addr: addr, lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) });
-            } else {
-                alert("Адрес не найден, добавляю текстом.");
-                points.push({ addr: addr, lat: null, lon: null });
+            if (data && data.length > 0) {
+                lat = parseFloat(data[0].lat);
+                lon = parseFloat(data[0].lon);
+                // Оставляем красивое имя
+                finalAddr = `${data[0].display_name.split(',').slice(0, 2).join(', ')}`;
             }
         } catch (e) {
-            points.push({ addr: addr, lat: null, lon: null });
+            console.error("Ошибка поиска координат", e);
         }
+
+        points.push({ 
+            addr: finalAddr, 
+            searchString: `${addr}, ${city}`,
+            lat: lat, 
+            lon: lon,
+            done: false 
+        });
         
         input.value = '';
+        savePointsToStorage();
         render();
     }
 
     function render() {
         const list = document.getElementById('list');
         list.innerHTML = '';
+        
+        if (points.length === 0) {
+            list.innerHTML = '<p style="color: #7f8c8d; text-align: center; margin-top: 20px;">Список пуст. Выберите город и введите адрес.</p>';
+            return;
+        }
+
         points.forEach((p, i) => {
             const div = document.createElement('div');
-            div.className = 'item';
+            div.className = `item ${p.lat !== null ? 'has-coords' : ''} ${p.done ? 'done' : ''}`;
+            
+            const statusIcon = p.lat !== null ? '🟢' : '🔴';
+            
             div.innerHTML = `
-                <span>${i+1}. ${p.addr}</span>
-                <a class="nav-btn" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.addr)}" target="_blank">GO</a>
+                <span>${statusIcon}</span>
+                <div class="addr-text" onclick="toggleDone(${i})">
+                    <b>${i + 1}.</b> ${p.addr}
+                </div>
+                <div class="actions">
+                    <a class="nav-btn" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.searchString)}" target="_blank">GO</a>
+                    <button class="del-btn" onclick="deletePoint(${i})">❌</button>
+                </div>
             `;
             list.appendChild(div);
         });
     }
 
+    function toggleDone(i) { 
+        points[i].done = !points[i].done; 
+        savePointsToStorage();
+        render(); 
+    }
+    
+    function deletePoint(i) { 
+        points.splice(i, 1); 
+        savePointsToStorage();
+        render(); 
+    }
+
+    function clearAll() {
+        if (confirm("Удалить все адреса из списка?")) {
+            points = [];
+            savePointsToStorage();
+            render();
+        }
+    }
+
     function optimize() {
-        if (points.length < 3) return;
-        
-        let sorted = [points[0]]; // Первая точка — старт
-        let unvisited = points.slice(1);
+        let valid = points.filter(p => p.lat !== null && p.lon !== null);
+        let invalid = points.filter(p => p.lat === null || p.lon === null);
+
+        if (valid.length < 2) {
+            alert("Нужно хотя бы 2 зеленых адреса 🟢 для сортировки.");
+            return;
+        }
+
+        let startingPoint = points[0].lat !== null ? points[0] : valid[0];
+        let unvisited = valid.filter(p => p !== startingPoint);
+        let sorted = [startingPoint];
 
         while (unvisited.length > 0) {
-            let last = sorted[sorted.length - 1];
-            let nearestIdx = 0;
+            let current = sorted[sorted.length - 1];
+            let nearestIdx = -1;
             let minDist = Infinity;
 
             for (let i = 0; i < unvisited.length; i++) {
-                if (last.lat && unvisited[i].lat) {
-                    let d = Math.hypot(last.lat - unvisited[i].lat, last.lon - unvisited[i].lon);
-                    if (d < minDist) { minDist = d; nearestIdx = i; }
+                let d = Math.hypot(current.lat - unvisited[i].lat, current.lon - unvisited[i].lon);
+                if (d < minDist) {
+                    minDist = d;
+                    nearestIdx = i;
                 }
             }
-            sorted.push(unvisited.splice(nearestIdx, 1)[0]);
+
+            if (nearestIdx !== -1) {
+                sorted.push(unvisited.splice(nearestIdx, 1)[0]);
+            } else {
+                break;
+            }
         }
-        points = sorted;
+
+        points = [...sorted, ...invalid];
+        savePointsToStorage();
         render();
     }
 </script>
