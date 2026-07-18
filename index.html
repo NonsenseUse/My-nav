@@ -185,8 +185,11 @@
         let reordered = order.map(i => points[i]);
         let coordStr = reordered.map(p => `${p.lng},${p.lat}`).join(';');
         
+        // Используем проверенный сервер маршрутизации openstreetmap.de
+        let osrmUrl = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
+        
         try {
-            let r = await fetch(`https://router.openstreetmap.org/route/v1/driving/${coordStr}?overview=full&geometries=geojson`);
+            let r = await fetch(osrmUrl);
             let d = await r.json();
             showLoading('opt-loading', false);
             if(d.routes && d.routes.length > 0) {
@@ -198,7 +201,7 @@
                 points = reordered; points.pop(); renderList();
                 setupGoogleMaps(points);
             }
-        } catch(e) { showLoading('opt-loading', false); }
+        } catch(e) { showLoading('opt-loading', false); alert('Ошибка связи с сервером дорог.'); }
     }
 
     function solveTSP(pts) {
@@ -244,3 +247,4 @@
 </script>
 </body>
 </html>
+
