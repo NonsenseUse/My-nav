@@ -42,7 +42,7 @@
         .address-index { font-weight: bold; background: #7f8c8d; color: white; border-radius: 5px; padding: 2px 6px; margin-right: 8px; }
         .start-point .address-index { background: #2ecc71; }
         #stats { display: none; background: #e8f4fd; border: 1px solid #d4e6f1; padding: 12px; border-radius: 4px; margin-top: 15px; }
-        #google-maps-btn { display: none; margin-top: 10px; background: #ff5722; width: 100%; padding: 12px; font-size: 1rem; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        #google-maps-btn-container { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
         .loading { display: none; text-align: center; padding: 10px; font-size: 0.9rem; color: #7f8c8d; font-style: italic; }
         @media (max-width: 768px) {
             #main-content { flex-direction: column-reverse; }
@@ -88,7 +88,9 @@
                     🛣️ Дистанция: <span id="stat-distance">0</span> км<br>
                     ⏱️ Время: <span id="stat-duration">0</span> мин
                 </div>
-                <button id="google-maps-btn">🗺️ Открыть навигатор Google Maps</button>
+                
+                <!-- Контейнер для динамических кнопок Google Maps -->
+                <div id="google-maps-btn-container"></div>
             </div>
         </div>
         <div id="map"></div>
@@ -185,7 +187,6 @@
         let reordered = order.map(i => points[i]);
         let coordStr = reordered.map(p => `${p.lng},${p.lat}`).join(';');
         
-        // Используем проверенный сервер маршрутизации openstreetmap.de
         let osrmUrl = `https://routing.openstreetmap.de/routed-car/route/v1/driving/${coordStr}?overview=full&geometries=geojson`;
         
         try {
@@ -220,9 +221,33 @@
     }
 
     function setupGoogleMaps(pts) {
-        let url = "https://www.google.com/maps/dir/" + pts.map(p => encodeURIComponent(p.address)).join('/') + '/' + encodeURIComponent(pts[0].address);
-        let btn = document.getElementById('google-maps-btn');
-        btn.style.display = 'block'; btn.onclick = () => window.open(url, '_blank');
+        let btnContainer = document.getElementById('google-maps-btn-container');
+        btnContainer.innerHTML = ''; // Очищаем прошлые пачки кнопок
+        
+        let chunkSize = 14; // Безопасный размер пачки для Google Maps
+        let totalPoints = pts.length;
+        
+        for (let i = 0; i < totalPoints; i += chunkSize) {
+            let chunk = pts.slice(i, i + chunkSize);
+            
+            // Чтобы куски маршрута "склеивались", добавляем в начало следующей пачки финальную точку предыдущей
+            if (i > 0) {
+                chunk.unshift(pts[i - 1]);
+            }
+            
+            let partNum = Math.floor(i / chunkSize) + 1;
+            let url = "https://www.google.com/maps/dir/" + chunk.map(p => encodeURIComponent(p.address)).join('/');
+            
+            let btn = document.createElement('button');
+            btn.style.cssText = "background: #ff5722; width: 100%; padding: 14px; font-size: 0.95rem; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.15);";
+            
+            let startIdx = i + 1;
+            let endIdx = Math.min(i + chunkSize, totalPoints);
+            btn.innerText = `🗺️ Навигатор: Часть ${partNum} (Адреса ${startIdx} - ${endIdx})`;
+            
+            btn.onclick = () => window.open(url, '_blank');
+            btnContainer.appendChild(btn);
+        }
     }
 
     async function handleOCR(e) {
@@ -242,9 +267,8 @@
     }
 
     function clearAll() { markers.forEach(m => map.removeLayer(m)); markers = []; points = []; resetRoute(); renderList(); }
-    function resetRoute() { if(routePolyline) map.removeLayer(routePolyline); document.getElementById('stats').style.display='none'; document.getElementById('google-maps-btn').style.display='none'; }
+    function resetRoute() { if(routePolyline) map.removeLayer(routePolyline); document.getElementById('stats').style.display='none'; document.getElementById('google-maps-btn-container').innerHTML=''; }
     function showLoading(id, show) { document.getElementById(id).style.display = show ? 'block' : 'none'; }
 </script>
 </body>
 </html>
-
