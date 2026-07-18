@@ -7,38 +7,33 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body { margin: 0; font-family: sans-serif; background: #f4f4f9; padding-bottom: 20px; }
-        #map { height: 250px; width: 100%; }
+        #map { height: 200px; width: 100%; }
         .panel { padding: 10px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .controls { display: flex; gap: 5px; margin-bottom: 10px; }
         .btn { padding: 12px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; flex: 1; }
         .btn-camera { background: #6c5ce7; position: relative; overflow: hidden; }
         .btn-opt { background: #e17055; }
-        .btn-add { background: #00b894; flex: 0; }
-        #list { list-style: none; padding: 0; margin: 10px; }
         .item { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid #6c5ce7; }
-        .item.done { border-left-color: #00b894; opacity: 0.7; }
-        .item-text { flex: 1; font-size: 16px; margin-right: 10px; }
-        .nav-link { background: #0984e3; padding: 10px 15px; color: white; text-decoration: none; border-radius: 5px; font-size: 14px; }
+        .item.done { border-left-color: #00b894; opacity: 0.6; }
+        .nav-link { background: #0984e3; padding: 10px 15px; color: white; text-decoration: none; border-radius: 5px; }
     </style>
 </head>
 <body>
 
 <div id="map"></div>
-
 <div class="panel">
     <div class="controls">
-        <button class="btn btn-camera">📸 Фото 
+        <button class="btn btn-camera">📸 Добавить по фото 
             <input type="file" id="camera" accept="image/*" capture="environment" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
         </button>
-        <button class="btn btn-opt" onclick="optimize()">🚀 Сортировка</button>
+        <button class="btn btn-opt" onclick="optimize()">🚀 Сортировать</button>
     </div>
     <div class="controls">
-        <input type="text" id="manualInput" placeholder="Введите адрес..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
-        <button class="btn btn-add" onclick="addManual()">+</button>
+        <input type="text" id="manualInput" placeholder="Введите адрес вручную..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
+        <button class="btn" style="background:#00b894; flex:0;" onclick="addManual()">+</button>
     </div>
 </div>
-
-<ul id="list"></ul>
+<ul id="list" style="list-style: none; padding: 0; margin: 10px;"></ul>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
@@ -48,16 +43,24 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
     let points = [];
 
-    async function addAddress(address) {
-        if (!address) return;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}, Bergamo&limit=1`);
-        const data = await res.json();
-        if (data.length > 0) {
-            points.push({ addr: address, lat: data[0].lat, lng: data[0].lon, done: false });
-            render();
-        } else {
-            alert("Адрес не найден: " + address);
-        }
+    async function addAddress(rawAddress) {
+        if (!rawAddress || rawAddress.length < 5) return;
+        
+        let point = { addr: rawAddress, lat: null, lng: null, done: false };
+        
+        // Пробуем найти координаты
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(rawAddress)}, Bergamo&limit=1`);
+            const data = await res.json();
+            if (data.length > 0) {
+                point.lat = data[0].lat;
+                point.lng = data[0].lon;
+                L.marker([point.lat, point.lng]).addTo(map);
+            }
+        } catch(e) { console.log("Карта не ответила, добавляем как текст"); }
+
+        points.push(point);
+        render();
     }
 
     function render() {
@@ -67,39 +70,37 @@
             const li = document.createElement('li');
             li.className = `item ${p.done ? 'done' : ''}`;
             li.innerHTML = `
-                <div class="item-text" onclick="toggle(${i})">${i+1}. ${p.addr}</div>
-                ${!p.done ? `<a class="nav-link" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.addr)}" target="_blank">GO</a>` : ''}
+                <div style="flex:1; margin-right:10px;" onclick="points[${i}].done=!points[${i}].done; render();">
+                    <b>${i+1}.</b> ${p.addr}
+                </div>
+                <a class="nav-link" href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.addr)}" target="_blank">GO</a>
             `;
             list.appendChild(li);
         });
     }
 
-    function toggle(i) { points[i].done = !points[i].done; render(); }
-    function addManual() { addAddress(document.getElementById('manualInput').value); document.getElementById('manualInput').value = ''; }
-    
+    function addManual() {
+        addAddress(document.getElementById('manualInput').value);
+        document.getElementById('manualInput').value = '';
+    }
+
     document.getElementById('camera').onchange = async (e) => {
         const res = await Tesseract.recognize(e.target.files[0], 'ita+eng');
-        const lines = res.data.text.split('\n');
-        // Берем самую длинную строку, скорее всего это адрес
-        let bestLine = lines.sort((a,b) => b.length - a.length)[0];
-        addAddress(bestLine);
+        // Разбиваем текст на строки и добавляем каждую, если она похожа на адрес
+        res.data.text.split('\n').forEach(line => {
+            if(line.length > 6) addAddress(line);
+        });
     };
 
     function optimize() {
-        if(points.length < 2) return;
-        let p = [...points]; let start = p.shift();
-        let sorted = [start];
-        while(p.length > 0) {
-            let last = sorted[sorted.length - 1];
-            let nearest = 0, dist = Infinity;
-            p.forEach((pt, idx) => {
-                let d = Math.hypot(last.lat - pt.lat, last.lng - pt.lng);
-                if(d < dist) { dist = d; nearest = idx; }
-            });
-            sorted.push(p.splice(nearest, 1)[0]);
-        }
-        points = sorted; render();
+        // Простая сортировка (оставляет первый адрес на месте, остальные двигает)
+        if(points.length < 3) return;
+        let start = points[0];
+        let rest = points.slice(1).sort((a,b) => (a.lat||0) - (b.lat||0)); // Простая сортировка по широте
+        points = [start, ...rest];
+        render();
     }
 </script>
 </body>
 </html>
+
