@@ -3,108 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Driver Dispatcher</title>
+    <title>Route Master</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        * { box-sizing: border-box; font-family: sans-serif; }
-        body { margin: 0; display: flex; flex-direction: column; height: 100vh; background: #f0f2f5; }
+        body { margin: 0; font-family: sans-serif; background: #f4f4f9; padding-bottom: 20px; }
         #map { height: 250px; width: 100%; }
-        #list-container { flex: 1; overflow-y: auto; padding: 10px; }
-        .item { background: white; padding: 12px; margin-bottom: 8px; border-radius: 8px; display: flex; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .item.done { opacity: 0.5; background: #d4edda; }
-        .info { flex: 1; font-size: 0.9rem; margin-right: 10px; }
-        .btn-nav { background: #4285f4; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-right: 5px; font-size: 0.8rem; }
-        .btn-done { background: #2ecc71; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
-        .controls { padding: 10px; background: white; display: flex; flex-direction: column; gap: 8px; }
-        .top-btns { display: flex; gap: 8px; }
-        .ocr-box { background: #e0e0e0; padding: 10px; border-radius: 5px; text-align: center; flex: 1; cursor: pointer; position: relative;}
+        .panel { padding: 10px; background: #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .controls { display: flex; gap: 5px; margin-bottom: 10px; }
+        .btn { padding: 12px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; flex: 1; }
+        .btn-camera { background: #6c5ce7; position: relative; overflow: hidden; }
+        .btn-opt { background: #e17055; }
+        .btn-add { background: #00b894; flex: 0; }
+        #list { list-style: none; padding: 0; margin: 10px; }
+        .item { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid #6c5ce7; }
+        .item.done { border-left-color: #00b894; opacity: 0.7; }
+        .item-text { flex: 1; font-size: 16px; margin-right: 10px; }
+        .nav-link { background: #0984e3; padding: 10px 15px; color: white; text-decoration: none; border-radius: 5px; font-size: 14px; }
     </style>
 </head>
 <body>
 
-<div id="map"></div> 
-    <div class="ocr-box">
-    📸 Фото (Заказ/Список)
-    <!-- Добавлен атрибут capture="environment" -->
-    <input type="file" id="ocr-input" accept="image/*" capture="environment" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
-</div>
+<div id="map"></div>
 
-
-<div class="controls">
-    <div class="top-btns">
-        <div class="ocr-box">
-            📸 Фото (Заказ/Список)
-            <input type="file" id="ocr-input" accept="image/*" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
-        </div>
-        <button onclick="optimizeRoute()" style="background: #e67e22; color:white; border:none; padding:10px; border-radius:5px; flex:1;">🚀 ОПТИМИЗИРОВАТЬ</button>
+<div class="panel">
+    <div class="controls">
+        <button class="btn btn-camera">📸 Фото 
+            <input type="file" id="camera" accept="image/*" capture="environment" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
+        </button>
+        <button class="btn btn-opt" onclick="optimize()">🚀 Сортировка</button>
     </div>
-    <div style="display:flex; gap:5px;">
-        <input type="text" id="manual-input" placeholder="Ввести адрес вручную..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
-        <button onclick="addManual()" style="background: #34495e; color:white; border:none; padding:10px; border-radius:5px;">➕</button>
+    <div class="controls">
+        <input type="text" id="manualInput" placeholder="Введите адрес..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
+        <button class="btn btn-add" onclick="addManual()">+</button>
     </div>
 </div>
 
-<div id="list-container"></div>
+<ul id="list"></ul>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+
 <script>
-    let map = L.map('map').setView([45.6983, 9.6773], 12);
+    const map = L.map('map').setView([45.698, 9.677], 12);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    let points = []; 
+    let points = [];
 
-    function renderList() {
-        let container = document.getElementById('list-container');
-        container.innerHTML = '';
-        points.forEach((p, i) => {
-            let div = document.createElement('div');
-            div.className = 'item' + (p.done ? ' done' : '');
-            div.innerHTML = `
-                <div class="info"><b>${i+1}.</b> ${p.address}</div>
-                ${!p.done ? `<a class="btn-nav" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.address)}" target="_blank">📍 GO</a>` : ''}
-                <button class="btn-done" onclick="toggleDone(${i})">${p.done ? '↩️' : '✅'}</button>
-            `;
-            container.appendChild(div);
-        });
-    }
-
-    function toggleDone(i) { points[i].done = !points[i].done; renderList(); }
-
-    async function addAddress(addr) {
-        let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}, Bergamo&limit=1`);
-        let d = await r.json();
-        if(d.length > 0) {
-            points.push({ lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon), address: d[0].display_name.split(',')[0], done: false });
-            L.marker([d[0].lat, d[0].lon]).addTo(map);
-            renderList();
+    async function addAddress(address) {
+        if (!address) return;
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}, Bergamo&limit=1`);
+        const data = await res.json();
+        if (data.length > 0) {
+            points.push({ addr: address, lat: data[0].lat, lng: data[0].lon, done: false });
+            render();
+        } else {
+            alert("Адрес не найден: " + address);
         }
     }
 
-    function addManual() {
-        let val = document.getElementById('manual-input').value;
-        if(val) { addAddress(val); document.getElementById('manual-input').value = ''; }
+    function render() {
+        const list = document.getElementById('list');
+        list.innerHTML = '';
+        points.forEach((p, i) => {
+            const li = document.createElement('li');
+            li.className = `item ${p.done ? 'done' : ''}`;
+            li.innerHTML = `
+                <div class="item-text" onclick="toggle(${i})">${i+1}. ${p.addr}</div>
+                ${!p.done ? `<a class="nav-link" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.addr)}" target="_blank">GO</a>` : ''}
+            `;
+            list.appendChild(li);
+        });
     }
 
-    document.getElementById('ocr-input').onchange = async (e) => {
-        let res = await Tesseract.recognize(e.target.files[0], 'ita+eng');
-        let lines = res.data.text.split('\n');
-        for(let line of lines) { if(line.length > 6) addAddress(line); }
+    function toggle(i) { points[i].done = !points[i].done; render(); }
+    function addManual() { addAddress(document.getElementById('manualInput').value); document.getElementById('manualInput').value = ''; }
+    
+    document.getElementById('camera').onchange = async (e) => {
+        const res = await Tesseract.recognize(e.target.files[0], 'ita+eng');
+        const lines = res.data.text.split('\n');
+        // Берем самую длинную строку, скорее всего это адрес
+        let bestLine = lines.sort((a,b) => b.length - a.length)[0];
+        addAddress(bestLine);
     };
 
-    function optimizeRoute() {
+    function optimize() {
         if(points.length < 2) return;
         let p = [...points]; let start = p.shift();
         let sorted = [start];
         while(p.length > 0) {
             let last = sorted[sorted.length - 1];
-            let nearest = 0, minDist = Infinity;
+            let nearest = 0, dist = Infinity;
             p.forEach((pt, idx) => {
                 let d = Math.hypot(last.lat - pt.lat, last.lng - pt.lng);
-                if(d < minDist) { minDist = d; nearest = idx; }
+                if(d < dist) { dist = d; nearest = idx; }
             });
             sorted.push(p.splice(nearest, 1)[0]);
         }
-        points = sorted; renderList();
+        points = sorted; render();
     }
 </script>
 </body>
