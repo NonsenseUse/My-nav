@@ -13,9 +13,9 @@
         .btn { padding: 12px; border: none; border-radius: 5px; cursor: pointer; color: white; font-weight: bold; flex: 1; }
         .btn-camera { background: #6c5ce7; position: relative; overflow: hidden; }
         .btn-opt { background: #e17055; }
-        .item { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid #6c5ce7; }
+        .item { background: white; padding: 15px; margin-bottom: 10px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid #6c5ce7; cursor: pointer; }
         .item.done { border-left-color: #00b894; opacity: 0.6; }
-        .nav-link { background: #0984e3; padding: 10px 15px; color: white; text-decoration: none; border-radius: 5px; }
+        .nav-link { background: #0984e3; padding: 10px 15px; color: white; text-decoration: none; border-radius: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -23,13 +23,13 @@
 <div id="map"></div>
 <div class="panel">
     <div class="controls">
-        <button class="btn btn-camera">📸 Добавить по фото 
+        <button class="btn btn-camera">📸 Добавить фото 
             <input type="file" id="camera" accept="image/*" capture="environment" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
         </button>
-        <button class="btn btn-opt" onclick="optimize()">🚀 Сортировать</button>
+        <button class="btn btn-opt" onclick="optimize()">🚀 Сортировать маршрут</button>
     </div>
     <div class="controls">
-        <input type="text" id="manualInput" placeholder="Введите адрес вручную..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
+        <input type="text" id="manualInput" placeholder="Введите адрес..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
         <button class="btn" style="background:#00b894; flex:0;" onclick="addManual()">+</button>
     </div>
 </div>
@@ -47,17 +47,15 @@
         if (!rawAddress || rawAddress.length < 5) return;
         
         let point = { addr: rawAddress, lat: null, lng: null, done: false };
-        
-        // Пробуем найти координаты
         try {
             const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(rawAddress)}, Bergamo&limit=1`);
             const data = await res.json();
             if (data.length > 0) {
-                point.lat = data[0].lat;
-                point.lng = data[0].lon;
+                point.lat = parseFloat(data[0].lat);
+                point.lng = parseFloat(data[0].lon);
                 L.marker([point.lat, point.lng]).addTo(map);
             }
-        } catch(e) { console.log("Карта не ответила, добавляем как текст"); }
+        } catch(e) { console.error(e); }
 
         points.push(point);
         render();
@@ -86,21 +84,45 @@
 
     document.getElementById('camera').onchange = async (e) => {
         const res = await Tesseract.recognize(e.target.files[0], 'ita+eng');
-        // Разбиваем текст на строки и добавляем каждую, если она похожа на адрес
         res.data.text.split('\n').forEach(line => {
             if(line.length > 6) addAddress(line);
         });
     };
 
     function optimize() {
-        // Простая сортировка (оставляет первый адрес на месте, остальные двигает)
-        if(points.length < 3) return;
-        let start = points[0];
-        let rest = points.slice(1).sort((a,b) => (a.lat||0) - (b.lat||0)); // Простая сортировка по широте
-        points = [start, ...rest];
+        if (points.length < 3) return; // Нечего сортировать
+
+        let sorted = [points[0]]; // Первая точка — старт
+        let unvisited = points.slice(1);
+
+        while (unvisited.length > 0) {
+            let lastPoint = sorted[sorted.length - 1];
+            let nearestIndex = -1;
+            let minDistance = Infinity;
+
+            for (let i = 0; i < unvisited.length; i++) {
+                let p = unvisited[i];
+                // Если координаты есть, считаем расстояние
+                if (lastPoint.lat && p.lat) {
+                    let d = Math.hypot(lastPoint.lat - p.lat, lastPoint.lng - p.lng);
+                    if (d < minDistance) {
+                        minDistance = d;
+                        nearestIndex = i;
+                    }
+                }
+            }
+
+            if (nearestIndex !== -1) {
+                sorted.push(unvisited.splice(nearestIndex, 1)[0]);
+            } else {
+                // Если адрес без координат (не нашел карту), кидаем его в конец
+                sorted.push(...unvisited);
+                unvisited = [];
+            }
+        }
+        points = sorted;
         render();
     }
 </script>
 </body>
 </html>
-
