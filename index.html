@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Route Optimizer Map</title>
+    <title>Route Optimizer Pro Map</title>
     <!-- Подключаем карту Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
@@ -11,7 +11,6 @@
         body { font-family: -apple-system, sans-serif; padding: 10px; background: #f5f7fb; margin: 0; }
         h3 { margin: 10px 0; color: #333; }
         
-        /* Стиль для карты */
         #map { 
             height: 250px; 
             width: 100%; 
@@ -22,9 +21,22 @@
         }
 
         .controls { display: flex; gap: 8px; margin-bottom: 10px; }
-        select { padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; background: white; font-weight: bold; color: #2c3e50; }
-        input { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
-        input:focus, select:focus { border-color: #3498db; outline: none; }
+        
+        /* Стили для нового поля города с подсказками */
+        #cityInput { 
+            width: 120px; 
+            flex: 0 0 120px; 
+            padding: 12px; 
+            border: 2px solid #ddd; 
+            border-radius: 8px; 
+            font-size: 15px; 
+            background: white; 
+            font-weight: bold; 
+            color: #2c3e50; 
+        }
+        
+        input[type="text"] { flex: 1; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
+        input:focus { border-color: #3498db; outline: none; }
         
         button { padding: 12px 18px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; color: white; }
         .btn-add { background: #2ecc71; }
@@ -45,15 +57,17 @@
 
 <h3>📍 Навигатор маршрута</h3>
 
-<!-- Контейнер карты -->
 <div id="map"></div>
 
 <div class="controls">
-    <select id="citySelect" onchange="saveSettings()">
-        <option value="Bergamo">Bergamo</option>
-        <option value="Curno">Curno</option>
-        <option value="Terno d'Isola">Terno d'Isola</option>
-    </select>
+    <!-- Поле ввода города с выпадающим списком быстрых вариантов -->
+    <input type="text" id="cityInput" placeholder="Город..." list="cityOptions" onchange="saveSettings()">
+    <datalist id="cityOptions">
+        <option value="Bergamo">
+        <option value="Curno">
+        <option value="Terno d'Isola">
+    </datalist>
+    
     <input type="text" id="addrInput" placeholder="Улица и дом...">
     <button class="btn-add" onclick="addAddress()">➕</button>
 </div>
@@ -65,7 +79,6 @@
 
 <div id="list"></div>
 
-<!-- Скрипт карты -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
@@ -73,22 +86,15 @@
     let map;
     let markerLayer;
 
-    // Инициализация всего при загрузке страницы
     window.onload = function() {
-        // Создаем карту (по умолчанию центрируем на Бергамо)
         map = L.map('map').setView([45.698, 9.677], 12);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        // Слой для меток, чтобы легко их стирать и перерисовывать
         markerLayer = L.layerGroup().addTo(map);
 
-        // Восстанавливаем город
+        // Восстанавливаем сохраненный город или ставим Bergamo по умолчанию
         const savedCity = localStorage.getItem('selectedCity');
-        if (savedCity) {
-            document.getElementById('citySelect').value = savedCity;
-        }
+        document.getElementById('cityInput').value = savedCity ? savedCity : 'Bergamo';
         
-        // Восстанавливаем точки
         const savedPoints = localStorage.getItem('routePoints');
         if (savedPoints) {
             points = JSON.parse(savedPoints);
@@ -97,7 +103,7 @@
     };
 
     function saveSettings() {
-        const city = document.getElementById('citySelect').value;
+        const city = document.getElementById('cityInput').value.trim();
         localStorage.setItem('selectedCity', city);
     }
 
@@ -110,7 +116,10 @@
         const addr = input.value.trim();
         if (!addr) return;
 
-        const city = document.getElementById('citySelect').value;
+        // Берем текущее значение из текстового поля города
+        let city = document.getElementById('cityInput').value.trim();
+        if (!city) city = 'Bergamo'; // Защита от пустого поля
+
         let lat = null;
         let lon = null;
         let finalAddr = `${addr} (${city})`;
@@ -123,6 +132,7 @@
             if (data && data.length > 0) {
                 lat = parseFloat(data[0].lat);
                 lon = parseFloat(data[0].lon);
+                // Оставляем красивое короткое имя для списка
                 finalAddr = `${data[0].display_name.split(',').slice(0, 2).join(', ')}`;
             }
         } catch (e) {
@@ -146,12 +156,11 @@
         const list = document.getElementById('list');
         list.innerHTML = '';
         
-        // Очищаем старые маркеры с карты перед перерисовкой
         markerLayer.clearLayers();
         let mapBounds = [];
         
         if (points.length === 0) {
-            list.innerHTML = '<p style="color: #7f8c8d; text-align: center; margin-top: 20px;">Список пуст. Добавьте адреса.</p>';
+            list.innerHTML = '<p style="color: #7f8c8d; text-align: center; margin-top: 20px;">Список пуст. Введите город и адрес.</p>';
             return;
         }
 
@@ -173,9 +182,7 @@
             `;
             list.appendChild(div);
 
-            // Если у точки есть координаты, добавляем числовую метку на карту
             if (p.lat !== null && p.lon !== null) {
-                // Цвет метки меняется на серый, если точка «выполнена»
                 const markerColor = p.done ? '#95a5a6' : '#3498db';
                 
                 const customIcon = L.divIcon({
@@ -189,12 +196,10 @@
                  .addTo(markerLayer)
                  .bindPopup(`<b>${i + 1}.</b> ${p.addr}`);
 
-                // Запоминаем координаты для авто-масштабирования карты
                 mapBounds.push([p.lat, p.lon]);
             }
         });
 
-        // Автоматически приближаем карту так, чтобы было видно ВСЕ добавленные точки
         if (mapBounds.length > 0) {
             map.fitBounds(mapBounds, { padding: [40, 40], maxZoom: 15 });
         }
