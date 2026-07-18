@@ -22,7 +22,6 @@
 
         .controls { display: flex; gap: 8px; margin-bottom: 10px; }
         
-        /* Стили для нового поля города с подсказками */
         #cityInput { 
             width: 120px; 
             flex: 0 0 120px; 
@@ -60,7 +59,6 @@
 <div id="map"></div>
 
 <div class="controls">
-    <!-- Поле ввода города с выпадающим списком быстрых вариантов -->
     <input type="text" id="cityInput" placeholder="Город..." list="cityOptions" onchange="saveSettings()">
     <datalist id="cityOptions">
         <option value="Bergamo">
@@ -91,7 +89,6 @@
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         markerLayer = L.layerGroup().addTo(map);
 
-        // Восстанавливаем сохраненный город или ставим Bergamo по умолчанию
         const savedCity = localStorage.getItem('selectedCity');
         document.getElementById('cityInput').value = savedCity ? savedCity : 'Bergamo';
         
@@ -111,36 +108,50 @@
         localStorage.setItem('routePoints', JSON.stringify(points));
     }
 
+    // Вспомогательная функция для запроса к серверу карт
+    async function queryOsm(searchString, city) {
+        try {
+            const query = `${searchString}, ${city}, Italy`;
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+            const data = await res.json();
+            return (data && data.length > 0) ? data[0] : null;
+        } catch (e) {
+            console.error("Ошибка сети при поиске", e);
+            return null;
+        }
+    }
+
     async function addAddress() {
         const input = document.getElementById('addrInput');
         const addr = input.value.trim();
         if (!addr) return;
 
-        // Берем текущее значение из текстового поля города
         let city = document.getElementById('cityInput').value.trim();
-        if (!city) city = 'Bergamo'; // Защита от пустого поля
+        if (!city) city = 'Bergamo';
 
         let lat = null;
         let lon = null;
-        let finalAddr = `${addr} (${city})`;
+        
+        // 1. Пробуем найти адрес целиком (вместе с номером дома)
+        let match = await queryOsm(addr, city);
 
-        try {
-            const query = `${addr}, ${city}, Italy`;
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
-            const data = await res.json();
-            
-            if (data && data.length > 0) {
-                lat = parseFloat(data[0].lat);
-                lon = parseFloat(data[0].lon);
-                // Оставляем красивое короткое имя для списка
-                finalAddr = `${data[0].display_name.split(',').slice(0, 2).join(', ')}`;
+        // 2. ЗАПАСНОЙ ПЛАН: Если не нашли, отрезаем номер дома и ищем только саму улицу
+        if (!match) {
+            // Регулярное выражение убирает пробел и идущие следом цифры/буквы дома на конце строки
+            const streetOnly = addr.replace(/\s+\d+.*$/, '').trim();
+            if (streetOnly !== addr) {
+                match = await queryOsm(streetOnly, city);
             }
-        } catch (e) {
-            console.error("Ошибка поиска координат", e);
         }
 
+        if (match) {
+            lat = parseFloat(match.lat);
+            lon = parseFloat(match.lon);
+        }
+
+        // Сохраняем ровно то, что ввел пользователь, чтобы номер дома не потерялся на экране
         points.push({ 
-            addr: finalAddr, 
+            addr: `${addr} (${city})`, 
             searchString: `${addr}, ${city}`,
             lat: lat, 
             lon: lon,
