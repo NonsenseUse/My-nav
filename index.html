@@ -3,177 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Навигатор Pro</title>
-    
-    <!-- PWA Settings -->
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/854/854878.png">
-    <link rel="manifest" href="data:application/manifest+json,%7B%22name%22%3A%22%D0%9D%D0%B0%D0%B2%D0%B8%D0%B3%D0%B0%D1%82%D0%BE%D1%80%20Pro%22%2C%22short_name%22%3A%22%D0%9D%D0%B0%D0%B2%D0%B8%D0%B3%D0%B0%D1%82%D0%BE%D1%80%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%232c3e50%22%2C%22theme_color%22%3A%22%232c3e50%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22https%3A%2F%2Fcdn-icons-png.flaticon.com%2F512%2F854%2F854878.png%22%2C%22sizes%22%3A%22512x512%22%2C%22type%22%3A%22image%2Fpng%22%7D%5D%7D">
-
+    <title>Driver Dispatcher</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-        body, html { margin: 0; padding: 0; height: 100%; background-color: #f4f6f9; color: #333; overflow: hidden; }
-        #app-container { display: flex; flex-direction: column; height: 100%; }
-        header { background: #2c3e50; color: white; padding: 12px 20px; display: flex; align-items: center; z-index: 1000; padding-top: calc(12px + env(safe-area-inset-top)); }
-        #main-content { display: flex; flex: 1; position: relative; overflow: hidden; }
-        #sidebar { width: 360px; background: white; box-shadow: 2px 0 10px rgba(0,0,0,0.1); padding: 20px; display: flex; flex-direction: column; overflow-y: auto; z-index: 999; }
-        #map { flex: 1; height: 100%; }
-        .section { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 15px; }
-        .section-title { font-weight: bold; margin-bottom: 10px; color: #2c3e50; font-size: 0.95rem; text-transform: uppercase; }
-        .input-group { display: flex; margin-bottom: 10px; gap: 5px; }
-        input[type="text"] { flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { background: #3498db; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: 600; }
-        button.accent { background: #2ecc71; width: 100%; padding: 12px; font-size: 1rem; margin-top: 5px; }
-        button.danger { background: #e74c3c; padding: 5px 10px; font-size: 0.8rem; }
-        .ocr-box { background: #f8f9fa; border: 2px dashed #cbd5e1; border-radius: 6px; padding: 15px; text-align: center; cursor: pointer; position: relative; }
-        .address-list { list-style: none; padding: 0; margin: 0; max-height: 250px; overflow-y: auto; border: 1px solid #eee; }
-        .address-item { display: flex; align-items: center; padding: 8px 10px; border-bottom: 1px solid #eee; font-size: 0.85rem; }
-        #google-maps-btn-container { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
-        .loading { display: none; text-align: center; padding: 10px; color: #7f8c8d; font-style: italic; }
-        @media (max-width: 768px) { #main-content { flex-direction: column-reverse; } #sidebar { width: 100%; height: 50%; } #map { height: 50%; } }
+        * { box-sizing: border-box; font-family: sans-serif; }
+        body { margin: 0; display: flex; flex-direction: column; height: 100vh; background: #f0f2f5; }
+        #map { height: 250px; width: 100%; }
+        #list-container { flex: 1; overflow-y: auto; padding: 10px; }
+        .item { background: white; padding: 12px; margin-bottom: 8px; border-radius: 8px; display: flex; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .item.done { opacity: 0.5; background: #d4edda; }
+        .info { flex: 1; font-size: 0.9rem; margin-right: 10px; }
+        .btn-nav { background: #4285f4; color: white; padding: 8px 15px; border-radius: 5px; text-decoration: none; font-weight: bold; margin-right: 5px; font-size: 0.8rem; }
+        .btn-done { background: #2ecc71; color: white; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
+        .controls { padding: 10px; background: white; display: flex; flex-direction: column; gap: 8px; }
+        .top-btns { display: flex; gap: 8px; }
+        .ocr-box { background: #e0e0e0; padding: 10px; border-radius: 5px; text-align: center; flex: 1; cursor: pointer; position: relative;}
     </style>
 </head>
 <body>
 
-<div id="app-container">
-    <header><h1>📍 Навигатор Pro</h1></header>
-    <div id="main-content">
-        <div id="sidebar">
-            <div class="section">
-                <div class="section-title">📷 Список адресов</div>
-                <div class="ocr-box">
-                    <div>📸 Загрузить фото</div>
-                    <input type="file" id="ocr-file-input" accept="image/*" style="position:absolute; top:0; left:0; width:100%; height:100%; opacity:0;">
-                </div>
-                <div id="ocr-loading" class="loading">Распознаю...</div>
-            </div>
-            <div class="section" style="flex: 1;">
-                <div class="section-title" style="display: flex; justify-content: space-between;">
-                    <span>📍 Точки</span><button class="danger" id="clear-all-btn">Очистить</button>
-                </div>
-                <ul class="address-list" id="address-list-container"></ul>
-                <button class="accent" id="optimize-btn">🚀 ОПТИМИЗИРОВАТЬ</button>
-                <div id="opt-loading" class="loading">Считаю маршрут...</div>
-                <div id="google-maps-btn-container"></div>
-            </div>
+<div id="map"></div>
+
+<div class="controls">
+    <div class="top-btns">
+        <div class="ocr-box">
+            📸 Фото (Заказ/Список)
+            <input type="file" id="ocr-input" accept="image/*" style="position:absolute; inset:0; opacity:0; cursor:pointer;">
         </div>
-        <div id="map"></div>
+        <button onclick="optimizeRoute()" style="background: #e67e22; color:white; border:none; padding:10px; border-radius:5px; flex:1;">🚀 ОПТИМИЗИРОВАТЬ</button>
+    </div>
+    <div style="display:flex; gap:5px;">
+        <input type="text" id="manual-input" placeholder="Ввести адрес вручную..." style="flex:1; padding:10px; border:1px solid #ccc; border-radius:5px;">
+        <button onclick="addManual()" style="background: #34495e; color:white; border:none; padding:10px; border-radius:5px;">➕</button>
     </div>
 </div>
+
+<div id="list-container"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
 <script>
-    let map, markers = [], routePolyline = null, points = [];
-    
-    window.addEventListener('DOMContentLoaded', () => {
-        map = L.map('map').setView([45.6983, 9.6773], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        map.on('click', async (e) => {
-            let addr = await reverseGeocode(e.latlng.lat, e.latlng.lng);
-            addPoint(e.latlng.lat, e.latlng.lng, addr);
-        });
-        document.getElementById('clear-all-btn').addEventListener('click', clearAll);
-        document.getElementById('optimize-btn').addEventListener('click', optimizeRoute);
-        document.getElementById('ocr-file-input').addEventListener('change', handleOCR);
-    });
-
-    async function reverseGeocode(lat, lng) {
-        try {
-            let r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-            let d = await r.json();
-            return d.display_name.split(',').slice(0,2).join(',');
-        } catch(e) { return `Точка (${lat.toFixed(4)}, ${lng.toFixed(4)})`; }
-    }
-
-    function addPoint(lat, lng, address) {
-        points.push({ lat, lng, address });
-        let marker = L.marker([lat, lng]).addTo(map);
-        markers.push(marker);
-        renderList();
-    }
+    let map = L.map('map').setView([45.6983, 9.6773], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    let points = []; 
 
     function renderList() {
-        let c = document.getElementById('address-list-container');
-        c.innerHTML = '';
+        let container = document.getElementById('list-container');
+        container.innerHTML = '';
         points.forEach((p, i) => {
-            let li = document.createElement('li');
-            li.className = 'address-item';
-            li.innerHTML = `<b>${i===0?'🏁':'📦'}</b> <span style="margin-left:10px;">${p.address}</span>`;
-            c.appendChild(li);
+            let div = document.createElement('div');
+            div.className = 'item' + (p.done ? ' done' : '');
+            div.innerHTML = `
+                <div class="info"><b>${i+1}.</b> ${p.address}</div>
+                ${!p.done ? `<a class="btn-nav" href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.address)}" target="_blank">📍 GO</a>` : ''}
+                <button class="btn-done" onclick="toggleDone(${i})">${p.done ? '↩️' : '✅'}</button>
+            `;
+            container.appendChild(div);
         });
     }
 
-    async function optimizeRoute() {
-        if(points.length < 3) return alert('Нужно минимум 3 точки (старт + 2 адреса).');
-        document.getElementById('opt-loading').style.display = 'block';
-        
-        // Алгоритм TSP
+    function toggleDone(i) { points[i].done = !points[i].done; renderList(); }
+
+    async function addAddress(addr) {
+        let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}, Bergamo&limit=1`);
+        let d = await r.json();
+        if(d.length > 0) {
+            points.push({ lat: parseFloat(d[0].lat), lng: parseFloat(d[0].lon), address: d[0].display_name.split(',')[0], done: false });
+            L.marker([d[0].lat, d[0].lon]).addTo(map);
+            renderList();
+        }
+    }
+
+    function addManual() {
+        let val = document.getElementById('manual-input').value;
+        if(val) { addAddress(val); document.getElementById('manual-input').value = ''; }
+    }
+
+    document.getElementById('ocr-input').onchange = async (e) => {
+        let res = await Tesseract.recognize(e.target.files[0], 'ita+eng');
+        let lines = res.data.text.split('\n');
+        for(let line of lines) { if(line.length > 6) addAddress(line); }
+    };
+
+    function optimizeRoute() {
+        if(points.length < 2) return;
         let p = [...points]; let start = p.shift();
         let sorted = [start];
         while(p.length > 0) {
             let last = sorted[sorted.length - 1];
-            let nearestIdx = 0, minDist = Infinity;
-            p.forEach((pt, i) => {
+            let nearest = 0, minDist = Infinity;
+            p.forEach((pt, idx) => {
                 let d = Math.hypot(last.lat - pt.lat, last.lng - pt.lng);
-                if(d < minDist) { minDist = d; nearestIdx = i; }
+                if(d < minDist) { minDist = d; nearest = idx; }
             });
-            sorted.push(p.splice(nearestIdx, 1)[0]);
+            sorted.push(p.splice(nearest, 1)[0]);
         }
-        
-        let coordStr = sorted.map(p => `${p.lng},${p.lat}`).join(';');
-        try {
-            let r = await fetch(`https://routing.openstreetmap.de/routed-car/route/v1/driving/${coordStr}?overview=full&geometries=geojson`);
-            let d = await r.json();
-            document.getElementById('opt-loading').style.display = 'none';
-            if(d.routes) {
-                if(routePolyline) map.removeLayer(routePolyline);
-                routePolyline = L.polyline(d.routes[0].geometry.coordinates.map(c=>[c[1], c[0]]), {color:'#3498db', weight:5}).addTo(map);
-                setupGoogleMaps(sorted);
-            }
-        } catch(e) { alert('Ошибка сети'); }
-    }
-
-    function setupGoogleMaps(pts) {
-        let container = document.getElementById('google-maps-btn-container');
-        container.innerHTML = '';
-        let chunkSize = 9; // Максимум для стабильности
-        for (let i = 0; i < pts.length; i += chunkSize) {
-            let chunk = pts.slice(i, i + chunkSize);
-            if(i > 0) chunk.unshift(pts[i-1]); // Склейка
-            let url = "https://www.google.com/maps/dir/" + chunk.map(p => encodeURIComponent(p.address)).join('/');
-            let btn = document.createElement('button');
-            btn.style.cssText = "background:#ff5722; color:white; width:100%; padding:12px; margin-top:5px; border:none; border-radius:5px; font-weight:bold;";
-            btn.innerText = `🗺️ Навигатор: Часть ${Math.floor(i/chunkSize)+1}`;
-            btn.onclick = () => window.open(url, '_blank');
-            container.appendChild(btn);
-        }
-    }
-
-    async function handleOCR(e) {
-        document.getElementById('ocr-loading').style.display = 'block';
-        try {
-            let res = await Tesseract.recognize(e.target.files[0], 'ita+eng');
-            let lines = res.data.text.split('\n');
-            for(let line of lines) {
-                if(line.length < 8) continue;
-                let r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(line)}, Bergamo&limit=1`);
-                let d = await r.json();
-                if(d.length > 0) addPoint(d[0].lat, d[0].lon, d[0].display_name.split(',')[0]);
-            }
-        } catch(e) {}
-        document.getElementById('ocr-loading').style.display = 'none';
-    }
-
-    function clearAll() { 
-        markers.forEach(m => map.removeLayer(m)); 
-        markers = []; points = []; 
-        document.getElementById('address-list-container').innerHTML = '';
-        document.getElementById('google-maps-btn-container').innerHTML = '';
-        if(routePolyline) map.removeLayer(routePolyline);
+        points = sorted; renderList();
     }
 </script>
 </body>
